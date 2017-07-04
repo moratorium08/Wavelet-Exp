@@ -1,7 +1,10 @@
 # coding:utf-8
+from __future__ import division, print_function
+from functools import reduce
 import sys
 import wave
 import pyaudio
+from math import sqrt
 
 filename = "affection.wav"
 block = 128
@@ -97,10 +100,147 @@ def upsampling(vec, size=2):
 def downsampling(vec, size=2):
     return vec[::size]
 
-def convolution(vec1, vec2):
-    pass
+dim = 4096
+h = [0 for i in range(4096)]
+h[0] = 1 / sqrt(2)
+h[1] = 1 / sqrt(2)
 
+g = [0 for i in range(4096)]
+g[0] = 1 / sqrt(2)
+g[1] = -1 / sqrt(2)
+
+def _convolution_period(vec1, vec2, k):
+    ret = 0
+    l = len(vec2)
+    for i in range(l):
+        ret += vec1[i] * vec2[(k - i) % l]
+    return ret
+
+def convolution_period(vec1, vec2, N=None):
+    # assert len(vec1) == len(vec2)
+    if N is None:
+        N = len(vec1)
+    ret = []
+    for k in range(N):
+        ret.append(_convolution_period(vec1, vec2, k))
+    return ret
+
+
+vec1 = [2, 1, 2, 1]
+vec2 = [1, 2, 3, 4]
+assert convolution_period(vec1, vec2) == [14, 16, 14, 16]
 assert downsampling(upsampling([1, 2, 3])) == [1, 2, 3]
+
+def reverse(l):
+    return [l[0]] + l[1:][::-1]
+
+def add(vec1, vec2):
+    assert len(vec1) == len(vec2)
+    return map(lambda x : x[0] + x[1], zip(vec1, vec2))
+
+def sub(vec1, vec2):
+    assert len(vec1) == len(vec2)
+    return map(lambda x : x[0] - x[1], zip(vec1, vec2))
+
+def norm(vec):
+    return reduce(lambda x, y: x + (y ** 2), vec, 0) ** 0.5
+
+
+
+u = [0, 1, 2, 3, 4, 5]
+phi = h[:6]
+psi = g[:6]
+
+phi_rev = reverse(phi)
+psi_rev = reverse(psi)
+
+p = convolution_period(phi_rev, u)
+p = upsampling(downsampling(p))
+p = convolution_period(phi, p)
+
+q = convolution_period(psi_rev, u)
+q = upsampling(downsampling(q))
+q = convolution_period(psi, q)
+
+print(p, q)
+u2 = add(p, q)
+assert norm(sub(u, u2)) < 0.01
+
+# print(add(p, q))
+
+def convolution_box(vec, g, up=0):
+    N = len(g) //2
+    #ret = upsampling(convolution_period(g, vec, N = N // (2 ** up)), size=2**up)
+    ret = upsampling(convolution_period(g, vec, N =N), size=2**up)
+    return ret
+
+def cycling(vec, N):
+    ret = []
+    while len(ret) < len(vec) * 2:
+        ret.extend(vec[:N])
+    return ret
+
+def decompose(u, g, h,  K = 4):
+    assert len(u) == len(g)
+    assert len(u) == len(h)
+    assert (len(u) % (2 ** K)) == 0
+
+    Ds = []
+    for i in range(K):
+        tmp = u
+        N = len(u)
+        for j in range(i):
+            hj = cycling(h, N // (2 ** j))
+            hj_rev = reverse(hj)
+            tmp = convolution_box(tmp, hj_rev, up=j)
+
+        gi = cycling(g, N // (2 ** i))
+        gi_rev = reverse(gi)
+        tmp = convolution_box(tmp, gi_rev, up=i)
+        tmp = downsampling(tmp, size=2 ** (i+1))
+        Ds.append(tmp)
+
+    A_vec = u
+    for j in range(K):
+        hj = cycling(h, N // (2 ** j))
+        hj_rev = reverse(hj)
+        A_vec = convolution_box(A_vec, hj_rev, up=j)
+    A_vec = downsampling(A_vec, size=2**K)
+    return Ds, A_vec
+
+def compose(D, A, g, h, K=4):
+    Q = []
+    tmp = upsampling(A, size=2**K)
+    N = len(h)
+    for j in range(K-1, -1, -1):
+        hj = cycling(h, N // (2 ** j))
+        tmp = convolution_box(tmp, hj, up=j)
+    P = tmp
+
+    for i in range(K-1, -1 ,-1):
+        tmp = D[i]
+        tmp = upsampling(tmp, size=2 ** (i + 1))
+        gi = cycling(g, N // (2 ** i))
+        tmp = convolution_box(tmp, gi, up=i)
+        for j in range(i-1, -1, -1):
+            hj = cycling(h, N // (2 ** j))
+            tmp = convolution_box(tmp, hj, up=j)
+
+        Q.append(tmp)
+    return P, Q
+
+SIZE = 12
+K = 1
+g_ = g[:SIZE]
+h_ = h[:SIZE]
+D, A = decompose(list(range(SIZE)), g_, h_, K)
+P, Q = compose(D, A, g_, h_, K)
+
+u2 = P
+for q in Q:
+    for i, x in enumerate(q):
+        u2[i] += x
+print(u2)
 
 
 def compress(filename):
