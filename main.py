@@ -228,11 +228,11 @@ def synthesize(D, A, g, h, K=4):
             tmp = convolution_box(tmp, hj, up=j)
 
         Q.append(tmp)
-    return P, Q
+    return list(reversed(Q)), P
 
 def wavelet_transform(u, g, h, level):
     D, A = analyze(u, g, h, level)
-    P, Q = synthesize(D, A, g, h, level)
+    Q, P = synthesize(D, A, g, h, level)
     return P, Q
 
 def sum_vec(vecs):
@@ -242,21 +242,36 @@ def sum_vec(vecs):
             ret[i] += x
     return ret
 
-def serialize(Ds, A):
+def serialize(Ds, A, flags):
+    Ds = Ds[:]
     Ds.append(A)
-    return reduce(lambda x, y: x + y, Ds, [])
+    assert len(Ds) == len(flags)
+    return reduce(lambda x, y: x + (y[0] if y[1] else []), zip(Ds, flags), [])
 
-def deserialize(vec, level):
-    l = len(vec)
+def deserialize(vec, level, size, flags):
+    l = size
     idx = 0
     cnt = 1
     ret = []
     for i in range(level):
-        ub = idx + l // (2 ** cnt)
-        ret.append(vec[idx:ub])
-        idx = ub
+        if flags[i]:
+            ub = idx + l // (2 ** cnt)
+            ret.append(vec[idx:ub])
+            idx = ub
+        else:
+            # dummy (garbage code)
+            ret.append([0 for i in range(l // (2 ** cnt))])
         cnt += 1
-    return ret, vec[idx:]
+    if flags[level]:
+        A = vec[idx:]
+    else:
+        A = []
+    return ret, A
+
+flags = [True, False, True, False]
+serd = serialize([range(8),range(4),range(2)], range(2), flags)
+assert serd == [0, 1, 2, 3, 4, 5, 6, 7, 0, 1]
+assert deserialize(serd, 3, 16, flags)[0][0] == [0, 1, 2, 3, 4, 5, 6, 7]
 
 def sort_energies(vec):
     tmp = []
@@ -270,37 +285,41 @@ def cum_energies(vec):
     for x in vec:
         assert x[0] < bef
         data.append(data[-1] + x[0])
-    return data[1:]
-
-
+    return data
 
 SIZE = 16
 K = 3
 g_ = g[:SIZE]
 h_ = h[:SIZE]
 u = [i % 2 for i in range(16)]
+
 D, A = analyze(u, g_, h_, K)
-P, Q = synthesize(D, A, g_, h_, K)
-print(sum_vec(Q + [P]))
-
-
+Q, P = synthesize(D, A, g_, h_, K)
 energies = sort_energies(list(zip(D + [A], Q + [P])))
-
 ces = cum_energies(energies)
 
 sumall = ces[-1]
-threshold = 0.99
-ret = [0 for i in range(SIZE)]
-for i, ce in enumerate(ces):
-    if ce / sumall > 1.1:
-        break
+threshold = 0.98
+ret = [True for i in range(len(ces) - 1)]
+for i, ce in enumerate(ces[:-1]):
+    if ce / sumall < threshold:
+        continue
     norm, vec, idx = energies[i]
-    for j, x in enumerate(vec):
-        ret[idx + j] = x
+    ret[idx] = False
+result = serialize(D, A, ret)
 print(ret)
-
-print(ce)
+print(result)
+D2, A2 = deserialize(result, K, SIZE, ret)
 print(D, A)
+print(D2, A2)
+
+Q2, P2 = synthesize(D2, A2, g_, h_, K)
+print(P, Q)
+print(P2, Q2)
+print(sum_vec(Q2 + [P2]))
+
+#print(ce)
+#print(D, A)
 #print(P, Q)
 
 #D, A = decompose(list(range(SIZE)), g_, h_, K)
