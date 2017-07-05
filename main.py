@@ -5,6 +5,7 @@ import sys
 import wave
 import pyaudio
 from math import sqrt
+import numpy as np
 
 filename = "affection.wav"
 block = 128
@@ -102,12 +103,12 @@ def downsampling(vec, size=2):
 
 dim = 4096
 h = [0 for i in range(4096)]
-h[0] = 1 / sqrt(2)
-h[1] = 1 / sqrt(2)
+h[0] = np.float16(1 / sqrt(2))
+h[1] = np.float16(1 / sqrt(2))
 
 g = [0 for i in range(4096)]
-g[0] = 1 / sqrt(2)
-g[1] = -1 / sqrt(2)
+g[0] = np.float16(1 / sqrt(2))
+g[1] = np.float16(-1 / sqrt(2))
 
 def _convolution_period(vec1, vec2, k):
     ret = 0
@@ -146,7 +147,6 @@ def norm(vec):
     return reduce(lambda x, y: x + (y ** 2), vec, 0) ** 0.5
 
 
-
 u = [0, 1, 2, 3, 4, 5]
 phi = h[:6]
 psi = g[:6]
@@ -162,7 +162,6 @@ q = convolution_period(psi_rev, u)
 q = upsampling(downsampling(q))
 q = convolution_period(psi, q)
 
-print(p, q)
 u2 = add(p, q)
 assert norm(sub(u, u2)) < 0.01
 
@@ -171,7 +170,9 @@ assert norm(sub(u, u2)) < 0.01
 def convolution_box(vec, g, up=0):
     N = len(g) //2
     #ret = upsampling(convolution_period(g, vec, N = N // (2 ** up)), size=2**up)
-    ret = upsampling(convolution_period(g, vec, N =N), size=2**up)
+    #ret = upsampling(convolution_period(g, vec, N =N), size=2**up)
+    ret = convolution_period(upsampling(g,size=2**up), vec, N =N)
+    #print(len(ret))
     return ret
 
 def cycling(vec, N):
@@ -180,7 +181,7 @@ def cycling(vec, N):
         ret.extend(vec[:N])
     return ret
 
-def decompose(u, g, h,  K = 4):
+def analyze(u, g, h, K = 4):
     assert len(u) == len(g)
     assert len(u) == len(h)
     assert (len(u) % (2 ** K)) == 0
@@ -208,7 +209,7 @@ def decompose(u, g, h,  K = 4):
     A_vec = downsampling(A_vec, size=2**K)
     return Ds, A_vec
 
-def compose(D, A, g, h, K=4):
+def synthesize(D, A, g, h, K=4):
     Q = []
     tmp = upsampling(A, size=2**K)
     N = len(h)
@@ -229,18 +230,82 @@ def compose(D, A, g, h, K=4):
         Q.append(tmp)
     return P, Q
 
-SIZE = 12
-K = 1
+def wavelet_transform(u, g, h, level):
+    D, A = analyze(u, g, h, level)
+    P, Q = synthesize(D, A, g, h, level)
+    return P, Q
+
+def sum_vec(vecs):
+    ret = vecs[0]
+    for vec in vecs[1:]:
+        for i, x in enumerate(vec):
+            ret[i] += x
+    return ret
+
+def serialize(Ds, A):
+    Ds.append(A)
+    return reduce(lambda x, y: x + y, Ds, [])
+
+def deserialize(vec, level):
+    l = len(vec)
+    idx = 0
+    cnt = 1
+    ret = []
+    for i in range(level):
+        ub = idx + l // (2 ** cnt)
+        ret.append(vec[idx:ub])
+        idx = ub
+        cnt += 1
+    return ret, vec[idx:]
+
+def sort_energies(vec):
+    tmp = []
+    for i, x in enumerate(vec):
+        tmp.append((norm(x[1]) ** 2, x[0], i))
+    return list(reversed(sorted(tmp, key=lambda x: x[0])))
+
+def cum_energies(vec):
+    data = [0]
+    bef = vec[0][0] + 1
+    for x in vec:
+        assert x[0] < bef
+        data.append(data[-1] + x[0])
+    return data[1:]
+
+
+
+SIZE = 16
+K = 3
 g_ = g[:SIZE]
 h_ = h[:SIZE]
-D, A = decompose(list(range(SIZE)), g_, h_, K)
-P, Q = compose(D, A, g_, h_, K)
+u = [i % 2 for i in range(16)]
+D, A = analyze(u, g_, h_, K)
+P, Q = synthesize(D, A, g_, h_, K)
+print(sum_vec(Q + [P]))
 
-u2 = P
-for q in Q:
-    for i, x in enumerate(q):
-        u2[i] += x
-print(u2)
+
+energies = sort_energies(list(zip(D + [A], Q + [P])))
+
+ces = cum_energies(energies)
+
+sumall = ces[-1]
+threshold = 0.99
+ret = [0 for i in range(SIZE)]
+for i, ce in enumerate(ces):
+    if ce / sumall > 1.1:
+        break
+    norm, vec, idx = energies[i]
+    for j, x in enumerate(vec):
+        ret[idx + j] = x
+print(ret)
+
+print(ce)
+print(D, A)
+#print(P, Q)
+
+#D, A = decompose(list(range(SIZE)), g_, h_, K)
+#P, Q = compose(D, A, g_, h_, K)
+#print(map(round, sum_vec(Q + [P])))
 
 
 def compress(filename):
@@ -262,4 +327,3 @@ if __name__ == '__main__':
         exit(0)
     filename = sys.argv[1]
     playback_file(filename)
-
