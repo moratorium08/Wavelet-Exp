@@ -118,7 +118,6 @@ def _convolution_period(vec1, vec2, k):
     return ret
 
 def convolution_period(vec1, vec2, N=None):
-    # assert len(vec1) == len(vec2)
     if N is None:
         N = len(vec1)
     ret = []
@@ -187,11 +186,12 @@ def analyze(u, g, h, K = 4):
     assert (len(u) % (2 ** K)) == 0
 
     Ds = []
+    N = len(u)
+    hjs = [cycling(h, N // (2 ** j)) for j in range(K)]
     for i in range(K):
         tmp = u
-        N = len(u)
         for j in range(i):
-            hj = cycling(h, N // (2 ** j))
+            hj = hjs[j]
             hj_rev = reverse(hj)
             tmp = convolution_box(tmp, hj_rev, up=j)
 
@@ -203,7 +203,7 @@ def analyze(u, g, h, K = 4):
 
     A_vec = u
     for j in range(K):
-        hj = cycling(h, N // (2 ** j))
+        hj = hjs[j]
         hj_rev = reverse(hj)
         A_vec = convolution_box(A_vec, hj_rev, up=j)
     A_vec = downsampling(A_vec, size=2**K)
@@ -213,8 +213,9 @@ def synthesize(D, A, g, h, K=4):
     Q = []
     tmp = upsampling(A, size=2**K)
     N = len(h)
+    hjs = [cycling(h, N // (2 ** j)) for j in range(K)]
     for j in range(K-1, -1, -1):
-        hj = cycling(h, N // (2 ** j))
+        hj = hjs[j]
         tmp = convolution_box(tmp, hj, up=j)
     P = tmp
 
@@ -224,7 +225,7 @@ def synthesize(D, A, g, h, K=4):
         gi = cycling(g, N // (2 ** i))
         tmp = convolution_box(tmp, gi, up=i)
         for j in range(i-1, -1, -1):
-            hj = cycling(h, N // (2 ** j))
+            hj = hjs[j]
             tmp = convolution_box(tmp, hj, up=j)
 
         Q.append(tmp)
