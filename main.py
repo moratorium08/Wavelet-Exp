@@ -287,58 +287,57 @@ def cum_energies(vec):
         data.append(data[-1] + x[0])
     return data
 
+
 SIZE = 16
 K = 3
 g_ = g[:SIZE]
 h_ = h[:SIZE]
 u = [i % 2 for i in range(16)]
 
-D, A = analyze(u, g_, h_, K)
-Q, P = synthesize(D, A, g_, h_, K)
-energies = sort_energies(list(zip(D + [A], Q + [P])))
-ces = cum_energies(energies)
+def _compress(u, g_, h_, SIZE, K, threshold=0.98):
+    D, A = analyze(u, g_, h_, K)
+    Q, P = synthesize(D, A, g_, h_, K)
+    energies = sort_energies(list(zip(D + [A], Q + [P])))
+    ces = cum_energies(energies)
 
-sumall = ces[-1]
-threshold = 0.98
-ret = [True for i in range(len(ces) - 1)]
-for i, ce in enumerate(ces[:-1]):
-    if ce / sumall < threshold:
-        continue
-    norm, vec, idx = energies[i]
-    ret[idx] = False
-result = serialize(D, A, ret)
-print(ret)
-print(result)
-D2, A2 = deserialize(result, K, SIZE, ret)
-print(D, A)
-print(D2, A2)
+    sumall = ces[-1]
+    ret = [True for i in range(len(ces) - 1)]
+    for i, ce in enumerate(ces[:-1]):
+        if ce / sumall < threshold:
+            continue
+        norm, vec, idx = energies[i]
+        ret[idx] = False
+    result = serialize(D, A, ret)
+    return result, ret
 
-Q2, P2 = synthesize(D2, A2, g_, h_, K)
-print(P, Q)
-print(P2, Q2)
-print(sum_vec(Q2 + [P2]))
+def _decompress(result, flags, g_, h_, SIZE, K):
+    D2, A2 = deserialize(result, K, SIZE, flags)
+    Q2, P2 = synthesize(D2, A2, g_, h_, K)
+    return sum_vec(Q2 + [P2])
 
-#print(ce)
-#print(D, A)
-#print(P, Q)
-
-#D, A = decompose(list(range(SIZE)), g_, h_, K)
-#P, Q = compose(D, A, g_, h_, K)
-#print(map(round, sum_vec(Q + [P])))
-
+ret, flags = _compress(u, g_, h_, SIZE, K)
+u2 = _decompress(ret, flags, g_, h_, SIZE, K)
+assert map(int, map(round, u2)) == u
 
 def compress(filename):
-    # data reading
+    with open(filename, "rb") as f:
+        data = f.read()
+    data = bytes2vec(data)[:4096]
+    print(len(data))
+    x = 1 / sqrt(2)
+    g = [x, x] + [0 for i in range(4094)]
+    h = [x, -x] + [0 for i in range(4094)]
+    result = _compress(data, g, h, 4096, 4)
+    print(result)
 
-    # Pp(u), Qp(u), Qp(u-1) ...Q1(u)のそれぞれの係数の計算
-
-    # 係数の大きい順番に並び替え
-
-    # エネルギーの計算
 
     # 出力
     pass
 
+compress(dumpfile)
+
+def decompress(filename):
+    pass
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
