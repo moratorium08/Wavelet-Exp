@@ -88,8 +88,9 @@ with open(dumpfile, "rb") as f:
     #f.write(data)
 
 assert bytes2vec(vec2bytes([1, 2, 3])) == [1, 2, 3]
-#data = bytes2vec(data)
-#playback_data(vec2bytes(data))
+data = bytes2vec(data)
+print(data[:10])
+playback_data(vec2bytes(data))
 
 def upsampling(vec, size=2):
     ret = np.zeros(len(vec)*size)
@@ -217,7 +218,6 @@ def analyze(u, g, h, K = 4):
 
 def synthesize(D, A, g, h, K=4):
     Q = []
-    print(len(A))
     tmp = upsampling(A, size=2**K)
     N = len(h)
     hjs = [cycling(h, N // (2 ** j)) for j in range(K)]
@@ -273,7 +273,7 @@ def deserialize(vec, level, size, flags):
     if flags[level]:
         A = vec[idx:]
     else:
-        A = []
+        A = [0 for i in range(l // (2 ** (cnt - 1)))]
     return ret, A
 
 flags = [True, False, True, False]
@@ -347,9 +347,11 @@ def compress(filename):
     with open(filename, "rb") as f:
         bytedata = f.read()
     result_b = bytes()
-    bytedata = map(lambda x: x / (256 * 256), bytes2vec(bytedata))
+    bytedata = bytes2vec(bytedata)
+    print(bytedata[:10], bytedata[5000:5010])
+    bytedata = map(lambda x: x / (256 * 256), bytedata)
     #for i in range(len(bytedata)//4096):
-    for i in range(1):
+    for i in range(5):
         lb = i * 4096
         ub = (i + 1) * 4096
         data = bytedata[lb:ub]
@@ -358,25 +360,23 @@ def compress(filename):
         h = [x, -x] + [0 for i in range(4094)]
         result, flags = _compress(data, g, h, 4096, 12)
         d = len(result)
+        print(d)
         result_b += flags2bytes(flags)
         result_b += np.array(result, dtype=np.float16).tobytes()
-    print("A", len(result_b))
     with open(filename + ".cmpd", "wb") as f:
         f.write(result_b)
 
-compress(dumpfile)
+#compress(dumpfile)
 
 
 def decompress(filename):
     with open(filename, "rb") as f:
         dumpdata = f.read()
-    print("B", len(dumpdata))
-
     ret = []
-    for i in range(len(dumpdata)//4098):
-        print(i)
-        lb = 4096 * i
-        ub = 4096 * (i + 1)
+    const = 2 + 4096
+    for i in range(len(dumpdata) // const):
+        lb = const * i
+        ub = const * (i + 1)
 
         _dumpdata = dumpdata[lb:ub]
         flags_b = _dumpdata[:2]
@@ -387,12 +387,16 @@ def decompress(filename):
         x = 1 / sqrt(2)
         g = [x, x] + [0 for i in range(4094)]
         h = [x, -x] + [0 for i in range(4094)]
-        ret += map(lambda x: x * 256 * 256, _decompress(data, flags, g, h, 4096,
-            12))
-
+        result = _decompress(data, flags, g, h, 4096, 12)
+        ret += map(lambda x: x * 256 * 256, result)
+    print(ret[:10], ret[5000:5010])
     return ret
 
-decompress(dumpfile + ".cmpd")
+result = decompress(dumpfile + ".cmpd")
+print(len(result))
+result = map(lambda x: int(round(x)), result)
+print(result[:10], result[5000:5010])
+playback_data(vec2bytes(map(lambda x: int(round(x)), result)))
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
