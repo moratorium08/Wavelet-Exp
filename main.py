@@ -7,6 +7,7 @@ import pyaudio
 from math import sqrt
 import numpy as np
 import struct
+from vector import *
 
 filename = "affection.wav"
 block = 128
@@ -68,190 +69,14 @@ def playback_data(data):
     p.terminate()
 
 
-def bytes2vec(data):
-    ret = []
-    for i in range(0, len(data), 2):
-        x = ord(data[i + 1]) * 256 + ord(data[i])
-        ret.append(x)
-    return ret
-
-
-def vec2bytes(vec):
-    ret = bytes()
-    for x in vec:
-        x2 = x % 256
-        x1 = x // 256
-        if x1 >= 256:
-            x1 = 255
-        elif x1 < 0:
-            x1 = 0
-
-        try:
-            ret += chr(x2) + chr(x1)
-        except:
-            print(x2, x1)
-            raise
-    return ret
-
-
 #data = get_data(filename, 4096 * block, 20)
 with open(dumpfile, "rb") as f:
     data = f.read()
     #f.write(data)
 
-assert bytes2vec(vec2bytes([1, 2, 3])) == [1, 2, 3]
 #data = bytes2vec(data)
 #playback_data(vec2bytes(data))
 
-def upsampling(vec, size=2):
-    ret = np.zeros(len(vec)*size)
-    for i, x in enumerate(vec):
-        ret[size * i] = x
-    return ret.tolist()
-
-def downsampling(vec, size=2):
-    return vec[::size]
-
-dim = 4096
-h = [0 for i in range(4096)]
-h[0] = np.float16(1 / sqrt(2))
-h[1] = np.float16(1 / sqrt(2))
-
-g = [0 for i in range(4096)]
-g[0] = np.float16(1 / sqrt(2))
-g[1] = np.float16(-1 / sqrt(2))
-
-
-def _convolution_period(vec1, vec2, k):
-    ret = 0
-    l = len(vec2)
-    for i in range(l):
-        ret += vec1[i] * vec2[(k - i) % l]
-    return ret
-
-
-def convolution_period(vec1, vec2, N=None):
-    if N is None:
-        N = len(vec1)
-    ret = []
-    #for k in range(N):
-        #ret.append(_convolution_period(vec1, vec2, k))
-    signal = vec1[:N]
-    ker = vec2[:N]
-    try:
-        ret = np.real(np.fft.ifft( np.fft.fft(signal)*np.fft.fft(ker) )).tolist()
-    except:
-        print("Erro:", len(vec1), len(vec2))
-        raise
-
-    return ret
-
-vec1 = [2, 1, 2, 1]
-vec2 = [1, 2, 3, 4]
-assert convolution_period(vec1, vec2) == [14, 16, 14, 16]
-assert downsampling(upsampling([1, 2, 3])) == [1, 2, 3]
-
-
-def reverse(l):
-    return [l[0]] + l[1:][::-1]
-
-
-def add(vec1, vec2):
-    assert len(vec1) == len(vec2)
-    return map(lambda x : x[0] + x[1], zip(vec1, vec2))
-
-def sub(vec1, vec2):
-    assert len(vec1) == len(vec2)
-    return map(lambda x : x[0] - x[1], zip(vec1, vec2))
-
-def norm(vec):
-    return reduce(lambda x, y: x + (y ** 2), vec, 0) ** 0.5
-
-
-u = [0, 1, 2, 3, 4, 5]
-phi = h[:6]
-psi = g[:6]
-
-phi_rev = reverse(phi)
-psi_rev = reverse(psi)
-
-p = convolution_period(phi_rev, u)
-p = upsampling(downsampling(p))
-p = convolution_period(phi, p)
-
-q = convolution_period(psi_rev, u)
-q = upsampling(downsampling(q))
-q = convolution_period(psi, q)
-
-u2 = add(p, q)
-assert norm(sub(u, u2)) < 0.01
-
-# print(add(p, q))
-
-def convolution_box(vec, g, up=0):
-    N = len(g) //2
-    #ret = upsampling(convolution_period(g, vec, N = N // (2 ** up)), size=2**up)
-    #ret = upsampling(convolution_period(g, vec, N =N), size=2**up)
-    u = upsampling(g, size=2 ** up)
-    ret = convolution_period(u, vec, N =N)
-    return ret
-
-def cycling(vec, N):
-    ret = []
-    while len(ret) < len(vec) * 2:
-        ret.extend(vec[:N])
-    return ret
-
-def analyze(u, g, h, K = 4):
-    assert len(u) == len(g)
-    assert len(u) == len(h)
-    assert (len(u) % (2 ** K)) == 0
-
-    Ds = []
-    N = len(u)
-    hjs = [cycling(h, N // (2 ** j)) for j in range(K)]
-    for i in range(K):
-        tmp = u
-        for j in range(i):
-            hj = hjs[j]
-            hj_rev = reverse(hj)
-            tmp = convolution_box(tmp, hj_rev, up=j)
-
-        gi = cycling(g, N // (2 ** i))
-        gi_rev = reverse(gi)
-        tmp = convolution_box(tmp, gi_rev, up=i)
-        tmp = downsampling(tmp, size=2 ** (i+1))
-        Ds.append(tmp)
-
-    A_vec = u
-    for j in range(K):
-        hj = hjs[j]
-        hj_rev = reverse(hj)
-        A_vec = convolution_box(A_vec, hj_rev, up=j)
-    A_vec = downsampling(A_vec, size=2**K)
-    return Ds, A_vec
-
-def synthesize(D, A, g, h, K=4):
-    Q = []
-    tmp = upsampling(A, size=2**K)
-    N = len(h)
-    hjs = [cycling(h, N // (2 ** j)) for j in range(K)]
-    for j in range(K-1, -1, -1):
-        hj = hjs[j]
-        tmp = convolution_box(tmp, hj, up=j)
-    P = tmp
-
-    for i in range(K-1, -1 ,-1):
-        tmp = D[i]
-        tmp = upsampling(tmp, size=2 ** (i + 1))
-        gi = cycling(g, N // (2 ** i))
-        tmp = convolution_box(tmp, gi, up=i)
-        for j in range(i-1, -1, -1):
-            hj = hjs[j]
-            tmp = convolution_box(tmp, hj, up=j)
-
-        Q.append(tmp)
-    return list(reversed(Q)), P
 
 def wavelet_transform(u, g, h, level):
     D, A = analyze(u, g, h, level)
@@ -265,39 +90,6 @@ def sum_vec(vecs):
         for i, x in enumerate(vec):
             ret[i] += x
     return ret
-
-
-def serialize(Ds, A, flags):
-    Ds = Ds[:]
-    Ds.append(A)
-    assert len(Ds) == len(flags)
-    return reduce(lambda x, y: x + (y[0] if y[1] else []), zip(Ds, flags), [])
-
-
-def deserialize(vec, level, size, flags):
-    l = size
-    idx = 0
-    cnt = 1
-    ret = []
-    for i in range(level):
-        if flags[i]:
-            ub = idx + l // (2 ** cnt)
-            ret.append(vec[idx:ub])
-            idx = ub
-        else:
-            # dummy (garbage code)
-            ret.append([0 for i in range(l // (2 ** cnt))])
-        cnt += 1
-    if flags[level]:
-        A = vec[idx:]
-    else:
-        A = [0 for i in range(l // (2 ** (cnt - 1)))]
-    return ret, A
-
-flags = [True, False, True, False]
-serd = serialize([range(8),range(4),range(2)], range(2), flags)
-assert serd == [0, 1, 2, 3, 4, 5, 6, 7, 0, 1]
-assert deserialize(serd, 3, 16, flags)[0][0] == [0, 1, 2, 3, 4, 5, 6, 7]
 
 
 def sort_energies(vec):
