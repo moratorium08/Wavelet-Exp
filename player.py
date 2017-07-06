@@ -2,6 +2,11 @@
 import wave
 import pyaudio
 
+block = 128
+sampwidth = 2
+#channels = 2
+channels = 1
+framerate = 44100
 
 def playback_file(filename):
     wf = wave.open(filename, "r")

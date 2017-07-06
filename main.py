@@ -7,6 +7,7 @@ import numpy as np
 import struct
 from vector import *
 from player import *
+from wavelet import *
 
 filename = "affection.wav"
 dumpfile = "dump128blocks-raw"
@@ -43,6 +44,13 @@ def cum_energies(vec):
 
 SIZE = 16
 K = 3
+h = [0 for i in range(4096)]
+h[0] = np.float16(1 / sqrt(2))
+h[1] = np.float16(1 / sqrt(2))
+
+g = [0 for i in range(4096)]
+g[0] = np.float16(1 / sqrt(2))
+g[1] = np.float16(-1 / sqrt(2))
 g_ = g[:SIZE]
 h_ = h[:SIZE]
 u = [i % 2 for i in range(16)]
@@ -115,7 +123,6 @@ def compress(filename):
         f.write(result_b)
 
 #compress(dumpfile)
-
 
 def decompress(filename):
     with open(filename, "rb") as f:
