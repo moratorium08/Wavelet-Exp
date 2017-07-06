@@ -54,6 +54,7 @@ def get_data(filename, size, shift=3):
         ret = ret + byte_data[i:i + 2]
     return ret
 
+
 def playback_data(data):
     p = pyaudio.PyAudio()
     stream = p.open(format=p.get_format_from_width(sampwidth),
@@ -66,6 +67,7 @@ def playback_data(data):
     stream.close()
     p.terminate()
 
+
 def bytes2vec(data):
     ret = []
     for i in range(0, len(data), 2):
@@ -73,12 +75,22 @@ def bytes2vec(data):
         ret.append(x)
     return ret
 
+
 def vec2bytes(vec):
     ret = bytes()
     for x in vec:
         x2 = x % 256
         x1 = x // 256
-        ret += chr(x2) + chr(x1)
+        if x1 >= 256:
+            x1 = 255
+        elif x1 < 0:
+            x1 = 0
+
+        try:
+            ret += chr(x2) + chr(x1)
+        except:
+            print(x2, x1)
+            raise
     return ret
 
 
@@ -88,9 +100,8 @@ with open(dumpfile, "rb") as f:
     #f.write(data)
 
 assert bytes2vec(vec2bytes([1, 2, 3])) == [1, 2, 3]
-data = bytes2vec(data)
-print(data[:10])
-playback_data(vec2bytes(data))
+#data = bytes2vec(data)
+#playback_data(vec2bytes(data))
 
 def upsampling(vec, size=2):
     ret = np.zeros(len(vec)*size)
@@ -110,12 +121,14 @@ g = [0 for i in range(4096)]
 g[0] = np.float16(1 / sqrt(2))
 g[1] = np.float16(-1 / sqrt(2))
 
+
 def _convolution_period(vec1, vec2, k):
     ret = 0
     l = len(vec2)
     for i in range(l):
         ret += vec1[i] * vec2[(k - i) % l]
     return ret
+
 
 def convolution_period(vec1, vec2, N=None):
     if N is None:
@@ -138,8 +151,10 @@ vec2 = [1, 2, 3, 4]
 assert convolution_period(vec1, vec2) == [14, 16, 14, 16]
 assert downsampling(upsampling([1, 2, 3])) == [1, 2, 3]
 
+
 def reverse(l):
     return [l[0]] + l[1:][::-1]
+
 
 def add(vec1, vec2):
     assert len(vec1) == len(vec2)
@@ -243,6 +258,7 @@ def wavelet_transform(u, g, h, level):
     Q, P = synthesize(D, A, g, h, level)
     return P, Q
 
+
 def sum_vec(vecs):
     ret = vecs[0]
     for vec in vecs[1:]:
@@ -250,11 +266,13 @@ def sum_vec(vecs):
             ret[i] += x
     return ret
 
+
 def serialize(Ds, A, flags):
     Ds = Ds[:]
     Ds.append(A)
     assert len(Ds) == len(flags)
     return reduce(lambda x, y: x + (y[0] if y[1] else []), zip(Ds, flags), [])
+
 
 def deserialize(vec, level, size, flags):
     l = size
@@ -281,11 +299,13 @@ serd = serialize([range(8),range(4),range(2)], range(2), flags)
 assert serd == [0, 1, 2, 3, 4, 5, 6, 7, 0, 1]
 assert deserialize(serd, 3, 16, flags)[0][0] == [0, 1, 2, 3, 4, 5, 6, 7]
 
+
 def sort_energies(vec):
     tmp = []
     for i, x in enumerate(vec):
         tmp.append((norm(x[1]) ** 2, x[0], i))
     return list(reversed(sorted(tmp, key=lambda x: x[0])))
+
 
 def cum_energies(vec):
     data = [0]
@@ -302,7 +322,8 @@ g_ = g[:SIZE]
 h_ = h[:SIZE]
 u = [i % 2 for i in range(16)]
 
-def _compress(u, g_, h_, SIZE, K, threshold=0.98):
+
+def _compress(u, g_, h_, SIZE, K, threshold=1.1):
     D, A = analyze(u, g_, h_, K)
     Q, P = synthesize(D, A, g_, h_, K)
     energies = sort_energies(list(zip(D + [A], Q + [P])))
@@ -327,9 +348,11 @@ ret, flags = _compress(u, g_, h_, SIZE, K)
 u2 = _decompress(ret, flags, g_, h_, SIZE, K)
 assert map(int, map(round, u2)) == u
 
+
 def flags2bytes(flags):
     d = int(''.join(map(lambda x: str(int(x)), flags)), 2)
     return struct.pack('<h', d)
+
 
 def bytes2flags(b):
     x = struct.unpack('<h', b)[0]
@@ -348,7 +371,6 @@ def compress(filename):
         bytedata = f.read()
     result_b = bytes()
     bytedata = bytes2vec(bytedata)
-    print(bytedata[:10], bytedata[5000:5010])
     bytedata = map(lambda x: x / (256 * 256), bytedata)
     #for i in range(len(bytedata)//4096):
     for i in range(5):
@@ -359,10 +381,11 @@ def compress(filename):
         g = [x, x] + [0 for i in range(4094)]
         h = [x, -x] + [0 for i in range(4094)]
         result, flags = _compress(data, g, h, 4096, 12)
+        result = np.array(result, dtype=np.float16).tobytes()
         d = len(result)
-        print(d)
+        result_b += struct.pack('<h', d)
         result_b += flags2bytes(flags)
-        result_b += np.array(result, dtype=np.float16).tobytes()
+        result_b += result
     with open(filename + ".cmpd", "wb") as f:
         f.write(result_b)
 
@@ -373,11 +396,14 @@ def decompress(filename):
     with open(filename, "rb") as f:
         dumpdata = f.read()
     ret = []
-    const = 2 + 4096
-    for i in range(len(dumpdata) // const):
-        lb = const * i
-        ub = const * (i + 1)
-
+    idx = 0
+    while idx < len(dumpdata):
+        length = struct.unpack('<h', dumpdata[idx:idx + 2])[0]
+        idx += 2
+        lb = idx
+        ub = idx + length + 2
+        idx = ub
+        print(length, idx, len(dumpdata))
         _dumpdata = dumpdata[lb:ub]
         flags_b = _dumpdata[:2]
         flags = bytes2flags(flags_b)
@@ -389,13 +415,10 @@ def decompress(filename):
         h = [x, -x] + [0 for i in range(4094)]
         result = _decompress(data, flags, g, h, 4096, 12)
         ret += map(lambda x: x * 256 * 256, result)
-    print(ret[:10], ret[5000:5010])
     return ret
 
 result = decompress(dumpfile + ".cmpd")
-print(len(result))
 result = map(lambda x: int(round(x)), result)
-print(result[:10], result[5000:5010])
 playback_data(vec2bytes(map(lambda x: int(round(x)), result)))
 
 if __name__ == '__main__':
