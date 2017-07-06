@@ -6,6 +6,7 @@ import wave
 import pyaudio
 from math import sqrt
 import numpy as np
+import struct
 
 filename = "affection.wav"
 block = 128
@@ -47,12 +48,10 @@ def get_data(filename, size, shift=3):
         byte_data = byte_data + wf.readframes(chunk)
 
     ret = bytes()
-    print(len(byte_data))
     for i in range(0, len(byte_data), 4):
         if i % 100000 == 0:
             print(i)
         ret = ret + byte_data[i:i + 2]
-    print(len(ret))
     return ret
 
 def playback_data(data):
@@ -93,10 +92,10 @@ assert bytes2vec(vec2bytes([1, 2, 3])) == [1, 2, 3]
 #playback_data(vec2bytes(data))
 
 def upsampling(vec, size=2):
-    ret = []
-    for x in vec:
-        ret.extend([x] + [0 for i in range(size - 1)])
-    return ret
+    ret = np.zeros(len(vec)*size)
+    for i, x in enumerate(vec):
+        ret[size * i] = x
+    return ret.tolist()
 
 def downsampling(vec, size=2):
     return vec[::size]
@@ -121,10 +120,17 @@ def convolution_period(vec1, vec2, N=None):
     if N is None:
         N = len(vec1)
     ret = []
-    for k in range(N):
-        ret.append(_convolution_period(vec1, vec2, k))
-    return ret
+    #for k in range(N):
+        #ret.append(_convolution_period(vec1, vec2, k))
+    signal = vec1[:N]
+    ker = vec2[:N]
+    try:
+        ret = np.real(np.fft.ifft( np.fft.fft(signal)*np.fft.fft(ker) )).tolist()
+    except:
+        print("Erro:", len(vec1), len(vec2))
+        raise
 
+    return ret
 
 vec1 = [2, 1, 2, 1]
 vec2 = [1, 2, 3, 4]
@@ -170,8 +176,8 @@ def convolution_box(vec, g, up=0):
     N = len(g) //2
     #ret = upsampling(convolution_period(g, vec, N = N // (2 ** up)), size=2**up)
     #ret = upsampling(convolution_period(g, vec, N =N), size=2**up)
-    ret = convolution_period(upsampling(g,size=2**up), vec, N =N)
-    #print(len(ret))
+    u = upsampling(g, size=2 ** up)
+    ret = convolution_period(u, vec, N =N)
     return ret
 
 def cycling(vec, N):
@@ -211,6 +217,7 @@ def analyze(u, g, h, K = 4):
 
 def synthesize(D, A, g, h, K=4):
     Q = []
+    print(len(A))
     tmp = upsampling(A, size=2**K)
     N = len(h)
     hjs = [cycling(h, N // (2 ** j)) for j in range(K)]
@@ -320,25 +327,72 @@ ret, flags = _compress(u, g_, h_, SIZE, K)
 u2 = _decompress(ret, flags, g_, h_, SIZE, K)
 assert map(int, map(round, u2)) == u
 
+def flags2bytes(flags):
+    d = int(''.join(map(lambda x: str(int(x)), flags)), 2)
+    return struct.pack('<h', d)
+
+def bytes2flags(b):
+    x = struct.unpack('<h', b)[0]
+    ret = []
+    while x > 0:
+        if x % 2 == 1:
+            ret.append(True)
+        else:
+            ret.append(False)
+        x //= 2
+    return list(reversed(ret))
+
+
 def compress(filename):
     with open(filename, "rb") as f:
-        data = f.read()
-    data = bytes2vec(data)[:4096]
-    print(len(data))
-    x = 1 / sqrt(2)
-    g = [x, x] + [0 for i in range(4094)]
-    h = [x, -x] + [0 for i in range(4094)]
-    result = _compress(data, g, h, 4096, 4)
-    print(result)
-
-
-    # 出力
-    pass
+        bytedata = f.read()
+    result_b = bytes()
+    bytedata = map(lambda x: x / (256 * 256), bytes2vec(bytedata))
+    #for i in range(len(bytedata)//4096):
+    for i in range(1):
+        lb = i * 4096
+        ub = (i + 1) * 4096
+        data = bytedata[lb:ub]
+        x = 1 / sqrt(2)
+        g = [x, x] + [0 for i in range(4094)]
+        h = [x, -x] + [0 for i in range(4094)]
+        result, flags = _compress(data, g, h, 4096, 12)
+        d = len(result)
+        result_b += flags2bytes(flags)
+        result_b += np.array(result, dtype=np.float16).tobytes()
+    print("A", len(result_b))
+    with open(filename + ".cmpd", "wb") as f:
+        f.write(result_b)
 
 compress(dumpfile)
 
+
 def decompress(filename):
-    pass
+    with open(filename, "rb") as f:
+        dumpdata = f.read()
+    print("B", len(dumpdata))
+
+    ret = []
+    for i in range(len(dumpdata)//4098):
+        print(i)
+        lb = 4096 * i
+        ub = 4096 * (i + 1)
+
+        _dumpdata = dumpdata[lb:ub]
+        flags_b = _dumpdata[:2]
+        flags = bytes2flags(flags_b)
+        flags = [False for i in range(13 - len(flags))] + flags
+        data = _dumpdata[2:]
+        data = np.frombuffer(data, dtype=np.float16).tolist()
+        x = 1 / sqrt(2)
+        g = [x, x] + [0 for i in range(4094)]
+        h = [x, -x] + [0 for i in range(4094)]
+        ret += map(lambda x: x * 256 * 256, _decompress(data, flags, g, h, 4096,
+            12))
+
+    return ret
+
+decompress(dumpfile + ".cmpd")
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
