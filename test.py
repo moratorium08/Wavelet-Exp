@@ -3,6 +3,7 @@ import unittest
 from wavelet import serialize, deserialize
 from vector import *
 
+
 class TestWavelet(unittest.TestCase):
 
     def test_serialize(self):
@@ -13,19 +14,10 @@ class TestWavelet(unittest.TestCase):
         self.assertEqual(deserialize(serd, 3, 16, flags)[0][0],
                          [0, 1, 2, 3, 4, 5, 6, 7])
 
-    def test_isupper(self):
-        self.assertTrue('FOO'.isupper())
-        self.assertFalse('Foo'.isupper())
-
-    def test_split(self):
-        s = 'hello world'
-        self.assertEqual(s.split(), ['hello', 'world'])
-        # check that s.split fails when the separator is not a string
-        with self.assertRaises(TypeError):
-            s.split(2)
-
 vec1 = [2, 1, 2, 1]
 vec2 = [1, 2, 3, 4]
+
+
 class TestVector(unittest.TestCase):
 
     def test_convolution_period(self):
@@ -34,8 +26,42 @@ class TestVector(unittest.TestCase):
     def test_downsampling(self):
         self.assertEqual(downsampling(upsampling([1, 2, 3])), [1, 2, 3])
 
+    def test_bytes2vec(self):
+        self.assertEqual(bytes2vec(b'\x01\x00\x02\x00\x03\x00'), [1, 2, 3])
+
     def test_vec2bytes(self):
         self.assertEqual(bytes2vec(vec2bytes([1, 2, 3])), [1, 2, 3])
+
+    def test_add(self):
+        self.assertEqual(add([1, -2, 3], [1, 1, 1]), [2, -1, 4])
+
+    def test_sub(self):
+        self.assertEqual(sub([1, -2, 3], [1, 1, 1]), [0, -3, 2])
+
+    def test_norm(self):
+        self.assertEqual(int(norm([3, 4])), 5)
+
+    def test_reverse(self):
+        self.assertEqual(reverse([1, 2, 3]), [1, 3, 2])
+
+    def test_cycling(self):
+        self.assertEqual(cycling([1, 2, 3, 4], 2), [1, 2, 1, 2, 1, 2, 1, 2])
+
+    def test_upsampling(self):
+        self.assertEqual(upsampling([1, 2, 3], 2), [1, 0, 2, 0, 3, 0])
+        self.assertEqual(upsampling([1, 2, 3], 1), [1, 2, 3])
+
+    def test_downsampling(self):
+        self.assertEqual(downsampling([1, 0, 2, 0, 3, 0], 2), [1, 2, 3])
+        self.assertEqual(downsampling([1, 2, 3, 4, 5, 6], 3), [1, 4])
+        self.assertEqual(downsampling([1, 2, 3], 1), [1, 2, 3])
+
+    def test_convolution_box(self):
+        ret = convolution_box([1, 2, 3, 4], [1, 1, 1, 1], 2)
+        self.assertEqual(map(int, ret), [1, 2])
+
+    def test_sum_vec(self):
+        self.assertEqual(sum_vec([[1,2,3], [1,1,1], [-1, -2, -3]]), [1, 1, 1])
 
     def test_level1_haarwavelet(self):
         h = [0 for i in range(4096)]
@@ -65,4 +91,4 @@ class TestVector(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(verbosity=2)

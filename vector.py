@@ -84,9 +84,9 @@ def norm(vec):
 
 
 def convolution_box(vec, g, up=0):
-    N = len(g) //2
+    N = len(g) // 2
     u = upsampling(g, size=2 ** up)
-    ret = convolution_period(u, vec, N =N)
+    ret = convolution_period(u, vec, N)
     return ret
 
 
@@ -95,6 +95,7 @@ def cycling(vec, N):
     while len(ret) < len(vec) * 2:
         ret.extend(vec[:N])
     return ret
+
 
 def sum_vec(vecs):
     ret = vecs[0]
