@@ -8,6 +8,7 @@ sampwidth = 2
 channels = 1
 framerate = 44100
 
+
 def playback_file(filename):
     wf = wave.open(filename, "r")
     p = pyaudio.PyAudio()
@@ -25,6 +26,7 @@ def playback_file(filename):
 
     stream.close()
     p.terminate()
+
 
 # size must be multiple of 4096
 def get_data(filename, size, shift=3):

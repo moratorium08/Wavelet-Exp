@@ -11,11 +11,6 @@ from wavelet import *
 
 filename = "affection.wav"
 dumpfile = "dump128blocks-raw"
-block = 128
-sampwidth = 2
-#channels = 2
-channels = 1
-framerate = 44100
 
 
 #data = get_data(filename, 4096 * block, 20)
@@ -56,7 +51,7 @@ h_ = h[:SIZE]
 u = [i % 2 for i in range(16)]
 
 
-def _compress(u, g_, h_, SIZE, K, threshold=1.1):
+def _compress(u, g_, h_, SIZE, K, threshold=0.98):
     D, A = analyze(u, g_, h_, K)
     Q, P = synthesize(D, A, g_, h_, K)
     energies = sort_energies(list(zip(D + [A], Q + [P])))
