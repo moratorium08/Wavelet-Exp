@@ -95,3 +95,10 @@ def cycling(vec, N):
     while len(ret) < len(vec) * 2:
         ret.extend(vec[:N])
     return ret
+
+def sum_vec(vecs):
+    ret = vecs[0]
+    for vec in vecs[1:]:
+        for i, x in enumerate(vec):
+            ret[i] += x
+    return ret

@@ -9,30 +9,20 @@ from vector import *
 from player import *
 
 filename = "affection.wav"
+dumpfile = "dump128blocks-raw"
 block = 128
 sampwidth = 2
 #channels = 2
 channels = 1
 framerate = 44100
 
-dumpfile = "dump128blocks-raw"
-
-
 
 #data = get_data(filename, 4096 * block, 20)
 with open(dumpfile, "rb") as f:
     data = f.read()
     #f.write(data)
-
 #data = bytes2vec(data)
 #playback_data(vec2bytes(data))
-
-def sum_vec(vecs):
-    ret = vecs[0]
-    for vec in vecs[1:]:
-        for i, x in enumerate(vec):
-            ret[i] += x
-    return ret
 
 
 def sort_energies(vec):
