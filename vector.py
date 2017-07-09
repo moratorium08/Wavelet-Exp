@@ -36,10 +36,10 @@ def vec2bytes(vec):
 
 
 def upsampling(vec, size=2):
-    ret = np.zeros(len(vec)*size)
+    ret = [0] * (len(vec)*size)
     for i, x in enumerate(vec):
         ret[size * i] = x
-    return ret.tolist()
+    return ret
 
 
 def downsampling(vec, size=2):
