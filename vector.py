@@ -3,13 +3,15 @@ from __future__ import division, print_function
 import struct
 from functools import reduce
 from math import sqrt
+import struct
 import numpy as np
 
 
 def bytes2vec(data):
     ret = []
     for i in range(0, len(data), 2):
-        x = ord(data[i + 1]) * 256 + ord(data[i])
+        #x = ord(data[i + 1]) * 256 + ord(data[i])
+        x = struct.unpack('<h', data[i:i+2])[0]
         ret.append(x)
     return ret
 
@@ -17,7 +19,7 @@ def bytes2vec(data):
 def vec2bytes(vec):
     ret = bytes()
     for x in vec:
-        x2 = x % 256
+        """x2 = x % 256
         x1 = x // 256
         if x1 >= 256:
             x1 = 255
@@ -28,7 +30,8 @@ def vec2bytes(vec):
             ret += chr(x2) + chr(x1)
         except:
             print(x2, x1)
-            raise
+            raise"""
+        ret += struct.pack('<h', x)
     return ret
 
 

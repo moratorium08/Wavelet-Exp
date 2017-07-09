@@ -55,29 +55,36 @@ def synthesize(D, A, g, h, K=4):
     return list(reversed(Q)), P
 
 
-def serialize(Ds, A, flags):
+def serialize(Ds, A):
     Ds = Ds[:]
     Ds.append(A)
-    assert len(Ds) == len(flags)
-    return reduce(lambda x, y: x + (y[0] if y[1] else []), zip(Ds, flags), [])
+    return reduce(lambda x, y: x + y, Ds, [])
 
 
 def deserialize(vec, level, size, flags):
     l = size
-    idx = 0
     cnt = 1
     ret = []
+
+    idx = 0
+    itr = 0
     for i in range(level):
-        if flags[i]:
-            ub = idx + l // (2 ** cnt)
-            ret.append(vec[idx:ub])
-            idx = ub
-        else:
-            # dummy (garbage code)
-            ret.append([0 for i in range(l // (2 ** cnt))])
+        tmp = []
+        for j in range(l // (2 ** cnt)):
+            if flags[idx]:
+                tmp.append(vec[itr])
+                itr += 1
+            else:
+                tmp.append(0)
+            idx += 1
         cnt += 1
-    if flags[level]:
-        A = vec[idx:]
-    else:
-        A = [0 for i in range(l // (2 ** (cnt - 1)))]
+        ret.append(tmp)
+    A = []
+    for j in range(l // 2 ** (cnt - 1)):
+        if flags[idx]:
+            A.append(vec[itr])
+            itr += 1
+        else:
+            A.append(0)
+        idx += 1
     return ret, A
