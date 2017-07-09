@@ -6,43 +6,42 @@ from math import sqrt
 import numpy as np
 from player import *
 import matplotlib.pyplot as plt
-from compress import compress, decompress, chunk_size
+from compress import compress, decompress, chunk_size, read_wav_dump
+from compress import read_wavelet_dump
 from vector import *
 
 
 filename = "affection.wav"
 dumpfile = "dump128blocks-raw"
 
-
-
 #data = get_data(filename, chunk_size * block, 20)
-with open(dumpfile, "rb") as f:
-    data = f.read()
+#with open(dumpfile, "rb") as f:
+    #data = f.read()
     #f.write(data)
 #data = bytes2vec(data)
 #playback_data(vec2bytes(data))
 
-SIZE = 16
-K = 3
-h = [0 for i in range(chunk_size)]
-h[0] = np.float16(1 / sqrt(2))
-h[1] = np.float16(1 / sqrt(2))
+x = 1 / sqrt(2)
+g = [x, x] + [0 for i in range(chunk_size - 2)]
+h = [x, -x] + [0 for i in range(chunk_size - 2)]
 
-g = [0 for i in range(chunk_size)]
-g[0] = np.float16(1 / sqrt(2))
-g[1] = np.float16(-1 / sqrt(2))
-g_ = g[:SIZE]
-h_ = h[:SIZE]
-u = [i % 2 for i in range(16)]
-#u = [i % 4 for i in range(16)]
+size = 1
+bytedata = read_wav_dump(dumpfile)[:4096 * size]
+x = compress(bytedata, filename=dumpfile+".cmpd", verbose=0, threshold=0.999)
+print("Compress rate:", x / 4096 / 2)
+
+original = map(lambda x: x * 256 * 256, bytedata)
 
 
-# compress(dumpfile)
-result = decompress(dumpfile + ".cmpd")
-#plt.plot(map(lambda x: x / (256 * 256), result))
+dumpdata = read_wavelet_dump(dumpfile + ".cmpd")
+result = decompress(dumpdata, verbose=0)
 result = map(lambda x: int(round(x)), result)
-#plt.plot(result)
-#plt.show()
+dif = sub(original, result)
+print("MSE", norm(dif) ** 0.5 / 4096)
+plt.plot(original, label="raw_data")
+plt.plot(result, label="compressed")
+plt.legend()
+plt.show()
 playback_data(vec2bytes(map(lambda x: int(round(x)), result)))
 
 

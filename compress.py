@@ -21,10 +21,10 @@ def cum_energies(vec):
     data = [0]
     bef = vec[0][0] + 1
     for x in vec:
-        assert x[0] < bef
+        assert x[0] <= bef
+        bef = x[0]
         data.append(data[-1] + x[0])
     return data
-
 
 def _compress(u, g_, h_, SIZE, K, threshold=0.99):
     D, A = analyze(u, g_, h_, K)
@@ -72,37 +72,48 @@ def bytes2flags(b):
     return list(reversed(ret))
 
 
-def compress(filename):
-    with open(filename, "rb") as f:
-        bytedata = f.read()
-    result_b = bytes()
-    bytedata = bytes2vec(bytedata)
-    bytedata = map(lambda x: x / (256 * 256), bytedata)
+def compress(bytedata, g=None, h=None, threshold=0.98,
+        filename="dump.cmpd", verbose=0):
+    assert len(bytedata) % chunk_size == 0
     #for i in range(len(bytedata)//chunk_size):
-    for i in range(15):
-        lb = i * chunk_size
-        ub = (i + 1) * chunk_size
-        data = bytedata[lb:ub]
+    size = len(bytedata) // chunk_size
+
+    if g is None or h is None:
+        if verbose == 1:
+            print("[Warning]haar wavelet is used")
         x = 1 / sqrt(2)
         g = [x, x] + [0 for i in range(chunk_size - 2)]
         h = [x, -x] + [0 for i in range(chunk_size - 2)]
+    written_bytes = 0
 
-        result, flags = _compress(data, g, h, chunk_size, 12)
-        result = np.array(result, dtype=np.float16).tobytes()
-        d = len(result)
-        result_b += int2bytes(d)
-        result_b += flags2bytes(flags)
-        result_b += result
-    with open(filename + ".cmpd", "wb") as f:
+    with open(filename, "wb") as f:
+        result_b = bytes()
+        for i in range(size):
+            if verbose == 1:
+                print("%d/%d" % (i + 1, size))
+            lb = i * chunk_size
+            ub = (i + 1) * chunk_size
+            data = bytedata[lb:ub]
+
+            result, flags = _compress(data, g, h, chunk_size, 12,
+                    threshold=threshold)
+            result = np.array(result, dtype=np.float16).tobytes()
+            d = len(result)
+            result_b += int2bytes(d)
+            result_b += flags2bytes(flags)
+            result_b += result
+        written_bytes += len(result_b)
         f.write(result_b)
+    return written_bytes
 
-
-def decompress(filename):
-    with open(filename, "rb") as f:
-        dumpdata = f.read()
+def decompress(dumpdata, verbose=0):
     ret = []
     idx = 0
+    cnt = 0
     while idx < len(dumpdata):
+        if verbose == 1:
+            cnt += 1
+            print("%d" % cnt)
         length = bytes2int(dumpdata[idx:idx + 2])
         idx += 2
         lb = idx
@@ -120,3 +131,18 @@ def decompress(filename):
         result = _decompress(data, flags, g, h, chunk_size, 12)
         ret += map(lambda x: x * 256 * 256, result)
     return ret
+
+
+def read_wavelet_dump(filename):
+    with open(filename, "rb") as f:
+        dumpdata = f.read()
+    return dumpdata
+
+
+def read_wav_dump(filename):
+    with open(filename, "rb") as f:
+        bytedata = f.read()
+    result_b = bytes()
+    bytedata = bytes2vec(bytedata)
+    bytedata = map(lambda x: x / (256 * 256), bytedata)
+    return bytedata
