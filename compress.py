@@ -82,8 +82,8 @@ def compress(bytedata, g=None, h=None, threshold=0.98,
         if verbose == 1:
             print("[Warning]haar wavelet is used")
         x = 1 / sqrt(2)
-        g = [x, x] + [0 for i in range(chunk_size - 2)]
-        h = [x, -x] + [0 for i in range(chunk_size - 2)]
+        h = [x, x] + [0 for i in range(chunk_size - 2)]
+        g = [x, -x] + [0 for i in range(chunk_size - 2)]
     written_bytes = 0
 
     with open(filename, "wb") as f:
@@ -106,10 +106,16 @@ def compress(bytedata, g=None, h=None, threshold=0.98,
         f.write(result_b)
     return written_bytes
 
-def decompress(dumpdata, verbose=0):
+def decompress(dumpdata, verbose=0, g=None, h=None):
     ret = []
     idx = 0
     cnt = 0
+    if g is None or h is None:
+        if verbose == 1:
+            print("[Warning]haar wavelet is used")
+        x = 1 / sqrt(2)
+        h = [x, x] + [0 for i in range(chunk_size - 2)]
+        g = [x, -x] + [0 for i in range(chunk_size - 2)]
     while idx < len(dumpdata):
         if verbose == 1:
             cnt += 1
@@ -125,9 +131,6 @@ def decompress(dumpdata, verbose=0):
         flags = [False for i in range(chunk_size - len(flags))] + flags
         data = _dumpdata[chunk_size // 8:]
         data = np.frombuffer(data, dtype=np.float16).tolist()
-        x = 1 / sqrt(2)
-        g = [x, x] + [0 for i in range(chunk_size - 2)]
-        h = [x, -x] + [0 for i in range(chunk_size - 2)]
         result = _decompress(data, flags, g, h, chunk_size, 12)
         ret += map(lambda x: x * 256 * 256, result)
     return ret

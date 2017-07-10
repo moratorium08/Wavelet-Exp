@@ -15,11 +15,12 @@ filename = "affection.wav"
 dumpfile = "dump128blocks-raw"
 
 #data = get_data(filename, chunk_size * block, 20)
-#with open(dumpfile, "rb") as f:
-    #data = f.read()
+with open(dumpfile, "rb") as f:
+    data = f.read()
     #f.write(data)
-#data = bytes2vec(data)
-#playback_data(vec2bytes(data))
+data = bytes2vec(data)
+playback_data(vec2bytes(data))
+raise
 
 x = 1 / sqrt(2)
 g = [x, x] + [0 for i in range(chunk_size - 2)]
@@ -27,7 +28,7 @@ h = [x, -x] + [0 for i in range(chunk_size - 2)]
 
 size = 1
 bytedata = read_wav_dump(dumpfile)[:4096 * size]
-x = compress(bytedata, filename=dumpfile+".cmpd", verbose=0, threshold=0.999)
+x = compress(bytedata, filename=dumpfile+".cmpd", verbose=1, threshold=0.99)
 print("Compress rate:", x / 4096 / 2)
 
 original = map(lambda x: x * 256 * 256, bytedata)
@@ -44,6 +45,7 @@ plt.legend()
 plt.show()
 playback_data(vec2bytes(map(lambda x: int(round(x)), result)))
 
+"""
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
@@ -51,3 +53,4 @@ if __name__ == '__main__':
         exit(0)
     filename = sys.argv[1]
     playback_file(filename)
+"""
