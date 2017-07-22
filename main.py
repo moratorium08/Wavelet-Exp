@@ -18,9 +18,8 @@ dumpfile = "dump128blocks-raw"
 with open(dumpfile, "rb") as f:
     data = f.read()
     #f.write(data)
-data = bytes2vec(data)
-playback_data(vec2bytes(data))
-raise
+#data = bytes2vec(data)
+#playback_data(vec2bytes(data))
 
 x = 1 / sqrt(2)
 g = [x, x] + [0 for i in range(chunk_size - 2)]
@@ -38,7 +37,7 @@ dumpdata = read_wavelet_dump(dumpfile + ".cmpd")
 result = decompress(dumpdata, verbose=0)
 result = map(lambda x: int(round(x)), result)
 dif = sub(original, result)
-print("MSE", norm(dif) ** 0.5 / 4096)
+print("MSE", norm(dif) / 4096)
 plt.plot(original, label="raw_data")
 plt.plot(result, label="compressed")
 plt.legend()

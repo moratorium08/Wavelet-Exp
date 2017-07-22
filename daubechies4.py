@@ -26,11 +26,11 @@ g[3] = (-1 - sqrt(3)) / (4 * sqrt(2))
 
 
 dumpfile = "dump128blocks-raw"
-size = 15
+size = 1
 
 bytedata = read_wav_dump(dumpfile)[:4096 * size]
 x = compress(bytedata, filename=dumpfile+".daubechies4.cmpd",
-        verbose=1, threshold=0.98,
+        verbose=1, threshold=0.99,
         g=g,
         h=h)
 
@@ -45,7 +45,7 @@ result = decompress(dumpdata, verbose=0, g=g, h=h)
 result = map(lambda x: int(round(x)), result)
 dif = sub(original, result)
 
-print("MSE", (norm(dif) ** 0.5) / 4096)
+print("MSE", (norm(dif)) / 4096)
 
 plt.plot(original, label="raw_data")
 plt.plot(result, label="compressed")
