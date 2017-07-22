@@ -4,7 +4,6 @@ from functools import reduce
 import sys
 from math import sqrt
 import numpy as np
-from player import *
 import matplotlib.pyplot as plt
 from compress import compress, decompress, chunk_size, read_wav_dump
 from compress import read_wavelet_dump
