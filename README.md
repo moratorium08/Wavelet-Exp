@@ -10,6 +10,7 @@
 
 ```
 $ git clone https://github.com/moratorium08/Wavelet-Exp
+$ cd Wavelet-Exp
 $ git checkout reproduction
 $ pip install -r requirements.txt
 ```
