@@ -50,5 +50,3 @@ plt.plot(original, label="raw_data")
 plt.plot(result, label="compressed")
 plt.legend()
 plt.show()
-
-playback_data(vec2bytes(map(lambda x: int(round(x)), result)))
